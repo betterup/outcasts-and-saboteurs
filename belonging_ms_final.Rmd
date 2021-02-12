@@ -1,0 +1,581 @@
+---
+title: "Outcasts and Saboteurs: Analysis"
+author: "Evan Carr, Andrew Reece"
+output: html_document
+---
+
+## Setup
+```{r load_pkgs, echo=FALSE, warning=FALSE}
+library(pacman)
+p_load(janitor, corrplot, pwr2, lmSupport, vcd, car, conflicted, glue, 
+       Hmisc, mgcv, grid, psych, rlang, gridExtra, scales, emmeans, 
+       magrittr, broom, boot, multcomp, ggthemr, stringr, 
+       viridis, apaTables, cowplot, survival, survminer, ez, tidyverse)
+
+conflict_prefer("select", "dplyr")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("recode", "dplyr")
+conflict_prefer("summarize", "dplyr")
+
+source("helper_functions.R")
+```
+
+## Survey data  
+This is a survey on belonging in the workplace. All participants from this survey 
+were invited to participate in the subsequent Cyberball studies. This survey data 
+is merged with data from the later experimental studies mainly for demographic 
+information about participants. 
+```{r study1_load_data, message=FALSE, warning=FALSE, echo=FALSE}
+bel <- read_csv("data/belonging.csv")
+```
+
+Demographics
+```{r study1_demog, message=FALSE, warning=FALSE}
+get_demographics(bel)
+
+glue("Total N = {nrow(bel)}")
+glue("Mean age (SD) in years: {mean(bel$age) %>% round(2)} ({sd(bel$age) %>% round(2)})")
+```
+
+## Experimental study 1
+```{r study1_load_data, message=FALSE, warning=FALSE, echo=FALSE}
+study_1 <- read_csv("data/study_1.csv")
+```
+
+Demographics
+```{r study1_demog, message=FALSE, warning=FALSE}
+demog_study_1 <- demog_prep(study_1, bel)
+full_demographics(demog_study_1)
+summarise_demographics(demog_study_1)
+```
+
+Manipulation checks
+```{r study1_manip}
+study_1_manip_data <- study_1 %>% 
+  select(condition, ignored, excluded, belonged, mc_percent_ball, starts_with("aas")) %>% 
+  mutate(
+    condition = case_when(
+      condition == "Included" ~ 1,
+      condition == "Excluded" ~ 0,
+      TRUE ~ NA_real_),
+    aas_pos = rowMeans(select(., aas_pos), na.rm = TRUE),
+    aas_neg = rowMeans(select(., aas_neg), na.rm = TRUE))
+
+manip_check_t(study_1_manip_data)
+cohen.d(study_1_manip_data, "condition")$cohen.d
+inspect_manip_vars(study_1)
+ball_get_guess(study_1, condition)
+create_manip_plot(study_1_manip_data, fill_colors = c("red", "blue"), aas = TRUE)
+```
+
+Analyze DVs
+```{r study1_analyze}
+max_tasks <- 110
+get_2xN_cell_ct(study_1, condition, play_for)
+study_1_fit_data <- binom_anova(study_1, max_tasks = max_tasks, prop = FALSE)
+study_1_fit_data[["anova_summary"]]
+study_1_contrasts <- get_contrasts(study_1_fit_data[["fit"]], NULL) %>% as_tibble()
+```
+
+Plot condition x play_for interaction
+```{r study1_plot}
+anno_df <- data.frame(expand(study_1, condition, play_for), 
+                      anno_x = 1.5, anno_y = 22,
+                      pval = c("p = .66", "p < .001"))
+
+create_interaction_plot(study_1, anno_df, max_tasks)
+```
+
+## Study 2  
+Update: Equalized expected value
+```{r study2_load_data, message=FALSE, warning=FALSE, echo=FALSE}
+study_2 <- read_csv("data/study_2.csv")
+```
+
+Get demographic data:
+```{r study2_demog, message=FALSE, warning=FALSE}
+demog_study_2 <- demog_prep(study_2, bel)
+full_demographics(demog_study_2)
+summarise_demographics(demog_study_2)
+```
+
+Analyze manipulation checks:
+```{r study2_manip}
+study_2_manip_data <- study_2 %>% 
+  select(condition, ignored, excluded, belonged, mc_percent_ball, starts_with("aas")) %>% 
+  mutate(
+    condition = case_when(
+      condition == "Included" ~ 1,
+      condition == "Excluded" ~ 0,
+      TRUE ~ NA_real_),
+    aas_pos = rowMeans(select(., all_of(aas_pos)), na.rm = TRUE),
+    aas_neg = rowMeans(select(., all_of(aas_neg)), na.rm = TRUE))
+
+manip_check_t(study_2_manip_data)
+cohen.d(study_2_manip_data, "condition")$cohen.d
+inspect_manip_vars(study_2)
+ball_get_guess(study_2, condition)
+
+create_manip_plot(study_2_manip_data, fill_colors = c("red", "blue"), aas = TRUE)
+```
+
+Analyze main DVs:
+
+```{r study2_analyze}
+max_tasks_study_2 <- 100
+
+get_2xN_cell_ct(study_2, condition, play_for)
+
+study_2_fit_data <- binom_anova(study_2, max_tasks = max_tasks_study_2, prop = FALSE)
+study_2_fit_data[["anova_summary"]]
+study_2_contrasts <- get_contrasts(study_2_fit_data[["fit"]], NULL)
+```
+
+Plot main interaction:
+
+```{r study2_plot}
+anno_df <- data.frame(expand(study_2, condition, play_for), 
+                      anno_x = 1.5, anno_y = 22.5,
+                      pval = c("p = .51", "p < .001", "p = .51", "p < .001"))
+
+create_interaction_plot(study_2, anno_df, max_tasks_study_2)
+```
+
+## Study 3  
+Update: Add non-teammates "play for others" condition
+```{r study3_load_data, message=FALSE, warning=FALSE, echo=FALSE}
+study_3 <- read_csv("data/study_3.csv")
+```
+
+Demographics
+```{r study3_demog}
+demog_study_3 <- demog_prep(study_3, bel)
+full_demographics(demog_study_3)
+summarise_demographics(demog_study_3)
+```
+
+Manipulation checks
+```{r study3_manip}
+study_3_manip_data <- study_3 %>% 
+  select(condition, ignored, excluded, belonged, mc_percent_ball, starts_with("aas")) %>% 
+  mutate(
+    condition = case_when(
+      condition == "Included" ~ 1,
+      condition == "Excluded" ~ 0,
+      TRUE ~ NA_real_),
+    aas_pos = rowMeans(select(., aas_pos), na.rm = TRUE),
+    aas_neg = rowMeans(select(., aas_neg), na.rm = TRUE))
+
+manip_check_t(study_3_manip_data)
+cohen.d(study_3_manip_data, "condition")$cohen.d
+inspect_manip_vars(study_3)
+ball_get_guess(study_3, condition)
+
+create_manip_plot(study_3_manip_data, fill_colors = c("red", "blue"), aas = TRUE)
+```
+
+Analyze DVs
+```{r study3_analyze}
+max_tasks_study_3 <- 15
+
+get_2xN_cell_ct(study_3, condition, play_for)
+
+study_3_fit_data <- binom_anova(study_3, max_tasks = max_tasks_study_3, prop = FALSE)
+study_3_fit_data[["anova_summary"]]
+study_3_contrasts <- get_contrasts(study_3_fit_data[["fit"]], c(1,10,15))
+```
+
+Plot interaction
+```{r study3_plot}
+anno_df <- data.frame(expand(study_3, condition, play_for), 
+                      anno_x = 1.5, anno_y = 12.5,
+                      pval = paste0("p ", c("= .20", "= .46", "< .001", 
+                                            "= .20", "= .46", "< .001")))
+
+create_interaction_plot(study_3, anno_df, max_tasks_study_3)
+```
+
+## Survival analysis (study_1 + study_2 + study_3)
+```{r survival_setup}
+cols <- c("workerId", "condition", "condition_int", "play_for", 
+          "mc_percent_ball", "n_tasks", "prop_tasks", "missed_tasks")
+
+datasets <- list(study_1, study_2, study_3) %>% 
+  map(~select(.x, all_of(cols))) %>% 
+  bind_rows(.id = "study_id") %>%
+  mutate(max_tasks = n_tasks + missed_tasks,
+         censor = if_else(missed_tasks == 0, 0, 1))
+```
+
+```{r survival_analyze}
+# Self:
+survobj_self <- Surv(time = filter(datasets, play_for == "Self") %>% pull(n_tasks), 
+                     event = filter(datasets, play_for == "Self") %>% pull(censor))
+survfit_self <- survfit(survobj_self ~ condition_int, data = filter(datasets, play_for == "Self"))
+survdiff_self <- survdiff(survobj_self ~ condition_int, data = filter(datasets, play_for == "Self"))
+coxph_self <- coxph(survobj_self ~ condition_int, data = filter(datasets, play_for == "Self"))
+ggforest(coxph_self, data = filter(datasets, play_for == "Self"))
+
+# Team:
+survobj_team <- Surv(time = filter(datasets, play_for == "Team") %>% pull(n_tasks), 
+                     event = filter(datasets, play_for == "Team") %>% pull(censor))
+survfit_team <- survfit(survobj_team ~ condition_int, data = filter(datasets, play_for == "Team"))
+survdiff_team <- survdiff(survobj_team ~ condition_int, data = filter(datasets, play_for == "Team"))
+coxph_team <- coxph(survobj_team ~ condition_int, data = filter(datasets, play_for == "Team"))
+ggforest(coxph_team, data = filter(datasets, play_for == "Team"))
+
+# Check interaction using likelihood-ratio test to compare models:
+survobj_both <- Surv(time = filter(datasets, play_for != "Charity") %>% 
+                       pull(n_tasks), 
+                     event = filter(datasets, play_for != "Charity") %>% 
+                       pull(censor))
+
+anova(
+  coxph(survobj_both ~ condition_int + play_for, data = filter(datasets, play_for != "Charity")),
+  coxph(survobj_both ~ condition_int * play_for, data = filter(datasets, play_for != "Charity"))
+)
+```
+
+Survival plot
+```{r survival_plot}
+options(scipen = 6)
+create_survplot(survfit_self, "A (Self)")
+create_survplot(survfit_team, "B (Team)")
+```
+
+## Study 4  
+Update: Add interventions
+```{r study4_load_data, message=FALSE, warning=FALSE, echo=FALSE}
+study_4 <- read_csv("data/study_4.csv")
+```
+
+Manipulation checks
+```{r study4_manip}
+study_4_manip_data <- study_4 %>% 
+  select(condition, intervention, ignored, excluded, belonged, mc_percent_ball) %>%
+  filter(condition == "Excluded") %>% 
+  select(-condition) %>% 
+  rename(condition = intervention)
+
+# Only analyze within excluded condition:
+study_4_cnd_excl <- filter(study_4, condition == "Excluded")
+# Ignored:
+anova_wrapper(data = study_4_cnd_excl, dv = ignored, interv = intervention)
+# Excluded:
+anova_wrapper(data = study_4_cnd_excl, dv = excluded, interv = intervention)
+# Belonged:
+anova_wrapper(data = study_4_cnd_excl, dv = belonged, interv = intervention)
+# % Ball Tosses:
+anova_wrapper(data = study_4_cnd_excl, dv = mc_percent_ball, interv = intervention)
+
+inspect_manip_vars(study_4)
+ball_get_guess(study_4, condition)
+
+create_manip_plot(study_4_manip_data, aas = FALSE)
+
+# Do same thing within included condition (to report in supplementary materials):
+study_4_cnd_incl <- filter(study_4, condition == "Included")
+# Ignored:
+anova_wrapper(data = study_4_cnd_incl, dv = ignored, interv = intervention)
+# Excluded:
+anova_wrapper(data = study_4_cnd_incl, dv = excluded, interv = intervention)
+# Belonged:
+anova_wrapper(data = study_4_cnd_incl, dv = belonged, interv = intervention)
+# % Ball Tosses:
+anova_wrapper(data = study_4_cnd_incl, dv = mc_percent_ball, interv = intervention)
+
+create_manip_plot(
+  study_4 %>% 
+    select(condition, intervention, ignored, excluded, belonged, mc_percent_ball) %>%
+    filter(condition == "Included") %>% 
+    select(-condition) %>% 
+    rename(condition = intervention), 
+  aas = FALSE
+)
+```
+
+Analyze DVs
+```{r study4_analyze}
+get_2xN_cell_ct(study_4, condition, intervention)
+
+# Get means & SDs for n_tasks by intervention:
+study_4_summary <- study_4 %>% 
+  group_by(condition, intervention) %>% 
+  summarise(
+    mean_tasks = mean(n_tasks, na.rm=T),
+    sd_tasks = sd(n_tasks, na.rm=T),
+    n = n()
+  ) %>% 
+  as.data.frame()
+
+# Both included and excluded
+study_4_fit_data_1 <- glm(cbind(n_tasks, missed_tasks) ~ condition*intervention, 
+                       family=binomial(link="logit"),
+                       data = study_4)
+# Only excluded:
+study_4_fit_data_2 <- glm(cbind(n_tasks, missed_tasks) ~ intervention, 
+                       family=binomial(link="logit"),
+                       data = filter(study_4, condition == "Excluded"))
+study_4_fit_data_2 %>% Anova(., type = "II") %>% tidy()
+study_4_emmeans <- study_4_fit_data_2 %>% emmeans(~intervention)
+study_4_contrasts <- pairs(study_4_emmeans, adjust="holm")
+study_4_contrasts
+
+# Only included (for supplementary):
+study_4_fit_data_3 <- glm(cbind(n_tasks, missed_tasks) ~ intervention, 
+                       family=binomial(link="logit"),
+                       data = filter(study_4, condition == "Included"))
+study_4_fit_data_3 %>% Anova(., type = "II") %>% tidy()
+study_4_fit_data_3 %>% emmeans(~intervention)
+study_4_fit_data_3 %>% emmeans(~intervention) %>% pairs(adjust="holm")
+```
+
+Plot main findings
+```{r study4_plot}
+max_tasks_interventions <- 110
+
+cnds <- c("Included", "Excluded")
+
+summary_stats_team <- cnds %>% 
+  map(~{datasets %>% 
+      filter(condition == .x, play_for == "Team") %>% 
+      group_split(study_id) %>% 
+      map_dfr(~{summarise(
+        .x,
+        avg = pois_se(n_tasks)["y"],
+        lo_se = pois_se(n_tasks)["ymin"],
+        hi_se = pois_se(n_tasks)["ymax"],
+        n = n())}, .id = "study_id")}) %>% 
+  bind_rows(.id = "cnd_id")
+
+# Only using study_2 for mean reference lines:
+# Only within excluded condition:
+study_4 %>% 
+  filter(condition == "Excluded") %>% 
+  ggplot(aes(x = intervention, y = n_tasks, fill = intervention)) + 
+  stat_summary(fun.data = "pois_se", 
+               fun.args = list(n = max_tasks_interventions, prop = FALSE),
+               geom = "errorbar", color="black", width=.075, size=.75) +
+  geom_hline(yintercept = 
+               filter(study_2, condition == "Included", play_for == "Team") %>% 
+                 pull(n_tasks) %>% 
+                 mean(), 
+             linetype="dashed", color="blue") +
+  annotate("text", x = 1.2, y = 20.9, color = "blue", size = 3,
+           label="Inclusion (team)\nmean in Study 2") +
+  geom_hline(yintercept = 
+               filter(study_2, condition == "Excluded", play_for == "Team") %>% 
+                 pull(n_tasks) %>% 
+                 mean(), 
+             linetype="dashed", color="red") +
+  annotate("text", x = 3.8, y = 15.75, color = "red", size = 3,
+           label="Exclusion (team)\nmean in Study 2") +
+  geom_point(stat = "summary", fun = "mean", shape = 21, color = "black", 
+             size = 3, stroke = 1) +
+  scale_fill_viridis_d() +
+  labs(y = "Number of trials completed\nduring reward task",
+       fill = "Intervention Type") +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size=11, face="bold"),
+    axis.title.x = element_blank(),
+    axis.text = element_text(size=10),
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),
+    legend.text = element_text(size=9),
+    legend.title = element_text(size=9, face="bold"),
+    legend.position = "right",
+    axis.ticks.x = element_blank()
+  )
+
+# Only within included condition (for supplementary materials):
+study_4 %>% 
+  filter(condition == "Included") %>% 
+  ggplot(aes(x = intervention, y = n_tasks, fill = intervention)) + 
+  stat_summary(fun.data = "pois_se", 
+               fun.args = list(n = max_tasks_interventions, prop = FALSE),
+               geom = "errorbar", color="black", width=.075, size=.75) +
+  geom_hline(yintercept = 
+               filter(study_2, condition == "Included", play_for == "Team") %>% 
+                 pull(n_tasks) %>% 
+                 mean(), 
+             linetype="dashed", color="blue") +
+  annotate("text", x = 1.2, y = 21.5, color = "blue", size = 3,
+           label="Inclusion (team)\nmean in Study 2") +
+  geom_hline(yintercept = 
+               filter(study_2, condition == "Excluded", play_for == "Team") %>% 
+                 pull(n_tasks) %>% 
+                 mean(), 
+             linetype="dashed", color="red") +
+  annotate("text", x = 3.8, y = 15.75, color = "red", size = 3,
+           label="Exclusion (team)\nmean in Study 2") +
+  geom_point(stat = "summary", fun = "mean", shape = 21, color = "black", 
+             size = 3, stroke = 1) +
+  scale_fill_viridis_d() +
+  labs(y = "Number of trials completed\nduring reward task",
+       fill = "Intervention Type") +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size=11, face="bold"),
+    axis.title.x = element_blank(),
+    axis.text = element_text(size=10),
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),
+    legend.text = element_text(size=9),
+    legend.title = element_text(size=9, face="bold"),
+    legend.position = "right",
+    axis.ticks.x = element_blank()
+  )
+```
+
+
+## Study 5  
+Update: Replicate interventions  
+
+Participants were screened via Qualtrics to meet the following criteria:  
+  - Age > 18 years  
+  - Income > $25k  
+  - Currently employed  
+  - Not self-employed  
+  - Never played cyberball
+```{r study5_load_data, message=FALSE, warning=FALSE, echo=FALSE}
+study_5 <- read_csv("data/study_5.csv")
+```
+
+Demographics
+```{r study5_demog}
+demog_study_5 <- study_5 %>% 
+  rename(
+    sex = demog_gender,
+    age = demog_age,
+    race = demog_race,
+    edu = demog_edu,
+  )
+full_demographics(demog_study_5)
+summarise_demographics(demog_study_5)
+```
+
+Manipulation checks
+```{r study5_manip}
+study_5_manip_data <- study_5 %>% 
+  select(workerId, cnd_intervention, ignored, excluded, 
+         belonged, mc_percent_ball, aas_pos, aas_neg) %>% 
+  rename(condition = cnd_intervention) %>% 
+  mutate(condition = fct_relevel(condition, 
+                                 "Exclusion (control)",
+                                 "Inclusion (control)",
+                                 "Perspective",
+                                 "Mentorship",
+                                 "Empowerment"),
+         inclusion_code = if_else(condition == "Inclusion (control)", 1, 0))
+
+inspect_manip_vars(study_5)
+ball_get_guess(study_5, cnd_intervention)
+create_manip_plot(study_5_manip_data, aas = TRUE)
+
+# STATS with all 5 intervention conditions:
+# Ignored:
+anova_wrapper(data = study_5, dv = ignored, interv = condition)
+# Excluded:
+anova_wrapper(data = study_5, dv = excluded, interv = condition)
+# Belonged:
+anova_wrapper(data = study_5, dv = belonged, interv = condition)
+# % Ball Tosses:
+anova_wrapper(data = study_5, dv = mc_percent_ball, interv = condition)
+# Positive Emotions:
+anova_wrapper(data = study_5, dv = aas_pos, interv = condition)
+# Negative Emotions:
+anova_wrapper(data = study_5, dv = aas_neg, interv = cnd_intervention)
+
+# STATS comparing inclusion control vs. all others (excluded):
+# Ignored:
+anova_wrapper(data = study_5_manip_data, dv = ignored, interv = inclusion_code)
+# Excluded:
+anova_wrapper(data = study_5_manip_data, dv = excluded, interv = inclusion_code)
+# Belonged:
+anova_wrapper(data = study_5_manip_data, dv = belonged, interv = inclusion_code)
+# % Ball Tosses:
+anova_wrapper(data = study_5_manip_data, dv = mc_percent_ball, interv = inclusion_code)
+# Positive Emotions:
+anova_wrapper(data = study_5_manip_data, dv = aas_pos, interv = inclusion_code)
+# Negative Emotions:
+anova_wrapper(data = study_5_manip_data, dv = aas_neg, interv = inclusion_code)
+
+# STATS comparing between only exclusion conditions:
+study_5_filtered <- filter(study_5, cnd_intervention != "Inclusion (control)")
+# Ignored:
+anova_wrapper(data = study_5_filtered, dv = ignored, interv = cnd_intervention)
+# Excluded:
+anova_wrapper(data = study_5_filtered, dv = excluded, interv = cnd_intervention)
+# Belonged:
+anova_wrapper(data = study_5_filtered, dv = belonged, interv = cnd_intervention)
+# % Ball Tosses:
+anova_wrapper(data = study_5_filtered, dv = mc_percent_ball, interv = cnd_intervention)
+# Positive Emotions:
+anova_wrapper(data = study_5_filtered, dv = aas_pos, interv = cnd_intervention)
+# Negative Emotions:
+anova_wrapper(data = study_5_filtered, dv = aas_neg, interv = cnd_intervention)
+```
+
+Analyze DVs
+```{r study5_analyze}
+# Get n_tasks summary data by condition:
+study_5_summary <- study_5 %>% 
+  group_by(cnd_intervention) %>% 
+  summarize(
+    mean_tasks = mean(n_tasks, na.rm=T),
+    sd_tasks = sd(n_tasks, na.rm=T),
+    n = n()
+  ) %>% 
+  as.data.frame()
+
+# Fit model:
+study_5_fit_data <- glm(cbind(n_tasks, missed_tasks) ~ cnd_intervention,
+                          family = binomial(link="logit"),
+                          data = study_5)
+study_5_fit_data %>% Anova(., type = "II") %>% tidy()
+study_5_emmeans <- study_5_fit_data %>% emmeans(~cnd_intervention)
+study_5_contrasts <- pairs(study_5_emmeans, adjust="holm")
+study_5_contrasts
+```
+
+Plot  findings
+```{r study5_plot}
+max_tasks_interventionsrep <- 110
+
+study_5 %>% 
+  ggplot(aes(x=fct_relevel(cnd_intervention, 
+                           "Exclusion (control)",
+                           "Inclusion (control)",
+                           "Perspective",
+                           "Mentorship",
+                           "Empowerment"),
+             y=n_tasks, 
+             fill=fct_relevel(cnd_intervention, 
+                              "Exclusion (control)",
+                              "Inclusion (control)",
+                              "Perspective",
+                              "Mentorship",
+                              "Empowerment"))) + 
+  stat_summary(fun.data = "pois_se", 
+               fun.args = list(n = max_tasks_interventionsrep, prop = FALSE),
+               geom = "errorbar", color = "black", width = .075, size = .75) +
+  geom_point(stat = "summary", fun = "mean", shape = 21, color = "black", 
+             size = 3, stroke = 1) +
+  labs(y = "Number of trials completed\nduring reward task",
+       fill = "Condition") +
+  scale_fill_viridis_d() +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size=11, face="bold"),
+    axis.title.x = element_blank(),
+    axis.text = element_text(size=10),
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),
+    legend.text = element_text(size=9),
+    legend.title = element_text(size=9, face="bold"),
+    legend.position = "right",
+    axis.ticks.x = element_blank()
+  )
+```
+
