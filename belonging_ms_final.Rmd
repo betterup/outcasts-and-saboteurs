@@ -15,36 +15,18 @@ p_load(janitor, corrplot, pwr2, lmSupport, vcd, car, conflicted, glue,
 conflict_prefer("select", "dplyr")
 conflict_prefer("filter", "dplyr")
 conflict_prefer("recode", "dplyr")
-conflict_prefer("summarize", "dplyr")
 
 source("helper_functions.R")
 ```
 
-## Survey data  
-This is a survey on belonging in the workplace. All participants from this survey 
-were invited to participate in the subsequent Cyberball studies. This survey data 
-is merged with data from the later experimental studies mainly for demographic 
-information about participants. 
-```{r study1_load_data, message=FALSE, warning=FALSE, echo=FALSE}
-bel <- read_csv("data/belonging.csv")
-```
-
-Demographics
-```{r study1_demog, message=FALSE, warning=FALSE}
-get_demographics(bel)
-
-glue("Total N = {nrow(bel)}")
-glue("Mean age (SD) in years: {mean(bel$age) %>% round(2)} ({sd(bel$age) %>% round(2)})")
-```
-
-## Experimental study 1
+## Study 1
 ```{r study1_load_data, message=FALSE, warning=FALSE, echo=FALSE}
 study_1 <- read_csv("data/study_1.csv")
 ```
 
 Demographics
 ```{r study1_demog, message=FALSE, warning=FALSE}
-demog_study_1 <- demog_prep(study_1, bel)
+demog_study_1 <- demog_prep(study_1)
 full_demographics(demog_study_1)
 summarise_demographics(demog_study_1)
 ```
@@ -58,8 +40,8 @@ study_1_manip_data <- study_1 %>%
       condition == "Included" ~ 1,
       condition == "Excluded" ~ 0,
       TRUE ~ NA_real_),
-    aas_pos = rowMeans(select(., aas_pos), na.rm = TRUE),
-    aas_neg = rowMeans(select(., aas_neg), na.rm = TRUE))
+    aas_pos = rowMeans(select(., all_of(aas_pos)), na.rm = TRUE),
+    aas_neg = rowMeans(select(., all_of(aas_neg)), na.rm = TRUE))
 
 manip_check_t(study_1_manip_data)
 cohen.d(study_1_manip_data, "condition")$cohen.d
@@ -88,18 +70,18 @@ create_interaction_plot(study_1, anno_df, max_tasks)
 
 ## Study 2  
 Update: Equalized expected value
-```{r study2_load_data, message=FALSE, warning=FALSE, echo=FALSE}
+```{r study2_load_data}
 study_2 <- read_csv("data/study_2.csv")
 ```
 
-Get demographic data:
+Demographics
 ```{r study2_demog, message=FALSE, warning=FALSE}
-demog_study_2 <- demog_prep(study_2, bel)
+demog_study_2 <- demog_prep(study_2)
 full_demographics(demog_study_2)
 summarise_demographics(demog_study_2)
 ```
 
-Analyze manipulation checks:
+Manipulation checks
 ```{r study2_manip}
 study_2_manip_data <- study_2 %>% 
   select(condition, ignored, excluded, belonged, mc_percent_ball, starts_with("aas")) %>% 
@@ -119,8 +101,7 @@ ball_get_guess(study_2, condition)
 create_manip_plot(study_2_manip_data, fill_colors = c("red", "blue"), aas = TRUE)
 ```
 
-Analyze main DVs:
-
+Analyze DVs
 ```{r study2_analyze}
 max_tasks_study_2 <- 100
 
@@ -131,8 +112,7 @@ study_2_fit_data[["anova_summary"]]
 study_2_contrasts <- get_contrasts(study_2_fit_data[["fit"]], NULL)
 ```
 
-Plot main interaction:
-
+Plot interaction
 ```{r study2_plot}
 anno_df <- data.frame(expand(study_2, condition, play_for), 
                       anno_x = 1.5, anno_y = 22.5,
@@ -149,7 +129,7 @@ study_3 <- read_csv("data/study_3.csv")
 
 Demographics
 ```{r study3_demog}
-demog_study_3 <- demog_prep(study_3, bel)
+demog_study_3 <- demog_prep(study_3)
 full_demographics(demog_study_3)
 summarise_demographics(demog_study_3)
 ```
@@ -163,8 +143,8 @@ study_3_manip_data <- study_3 %>%
       condition == "Included" ~ 1,
       condition == "Excluded" ~ 0,
       TRUE ~ NA_real_),
-    aas_pos = rowMeans(select(., aas_pos), na.rm = TRUE),
-    aas_neg = rowMeans(select(., aas_neg), na.rm = TRUE))
+    aas_pos = rowMeans(select(., all_of(aas_pos)), na.rm = TRUE),
+    aas_neg = rowMeans(select(., all_of(aas_neg)), na.rm = TRUE))
 
 manip_check_t(study_3_manip_data)
 cohen.d(study_3_manip_data, "condition")$cohen.d
@@ -522,7 +502,7 @@ Analyze DVs
 # Get n_tasks summary data by condition:
 study_5_summary <- study_5 %>% 
   group_by(cnd_intervention) %>% 
-  summarize(
+  summarise(
     mean_tasks = mean(n_tasks, na.rm=T),
     sd_tasks = sd(n_tasks, na.rm=T),
     n = n()

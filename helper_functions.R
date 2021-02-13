@@ -5,12 +5,10 @@ format_desc <- function(col, df) df %>%
   tabyl({{col}}) %>% 
   mutate(across(where(is.numeric), round, 4))
 
-demog_prep <- function(df, survey_data) {
+demog_prep <- function(df) {
   df %>% 
-    select(workerId) %>% 
-    left_join(survey_data, by = c("workerId" = "workerid")) %>% 
     group_by(workerId) %>%
-    select(workerId, sex, race, edu, age, age_range) %>% 
+    select(sex, race, edu, age, age_range) %>% 
     distinct()
 }
 
@@ -25,10 +23,10 @@ full_demographics <- function(df) {
 
 summarise_demographics <- function(df) {
   n <- nrow(df)
-  mean_age <- mean(df$age) %>% round(2)
-  sd_age <- sd(df$age) %>% round(2)
-  glue("Total N = {n}")
-  glue("Mean age (SD) in years: {mean_age} ({sd_age})")
+  mean_age <- mean(df$age, na.rm = TRUE) %>% round(2)
+  sd_age <- sd(df$age, na.rm = TRUE) %>% round(2)
+  print(glue("Total N = {n}"))
+  print(glue("Mean age (SD) in years: {mean_age} ({sd_age})"))
 }
 
 # Create function for simpler manipulation check with t-tests:
@@ -65,7 +63,7 @@ create_manip_plot <- function(manip_data, fill_colors = viridis(n_distinct(manip
                        )
   
   manip_data %>% 
-    select(condition, manip_vars) %>% 
+    select(condition, all_of(manip_vars)) %>% 
     pivot_longer(-condition, names_to = "var", values_to = "val") %>% 
     mutate(condition = recode(condition, "0" = "Excluded", "1" = "Included"),
            var = recode(var, !!!manip_recodes)) %>% 
